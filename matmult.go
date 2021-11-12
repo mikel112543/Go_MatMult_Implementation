@@ -7,7 +7,6 @@ import (
 )
 
 type Matrix [][]int
-type StrassenMatrix [][]Matrix
 
 func printMat(inM Matrix) {
 
@@ -38,6 +37,20 @@ func newMatrix(r, c int) [][]int {
 	return m
 }
 
+func addMatrix(A Matrix, B Matrix) [][]int {
+	var row, col int
+	row = rowCount(A)
+	col = colCount(A)
+	C := newMatrix(row, col)
+
+	for i := 0; i < row; i++ {
+		for j := 0; j < col; j++ {
+			C[i][j] = A[i][j] + B[i][j]
+		}
+	}
+	return C
+}
+
 func splitMatrix(matrix Matrix, rowStart int, rowEnd int, colStart int, colEnd int, ret chan [][]int, splitWg *sync.WaitGroup) {
 	var i, j, p, q int
 	rA := rowCount(matrix)
@@ -56,7 +69,8 @@ func splitMatrix(matrix Matrix, rowStart int, rowEnd int, colStart int, colEnd i
 	ret <- c //Pass resulting Matrix into the channel
 }
 
-func doCalc(inA Matrix, inB Matrix) {
+func doCalc(inA Matrix, inB Matrix, calWg *sync.WaitGroup, ret chan [][]int) {
+	defer calWg.Done()
 	var i, j int
 	m := rowCount(inA) // number of rows the first matrix
 	//   n := colCount(inA)     // number of columns the first matrix
@@ -66,7 +80,7 @@ func doCalc(inA Matrix, inB Matrix) {
 	total := 0
 
 	if p <= 2 {
-		nM := newMatrix(m, q) // create new matrix
+		C := newMatrix(m, q) // create new matrix
 
 		start := time.Now()
 		time.Sleep(1111 * time.Millisecond) // just to max sure timer works delete later
@@ -78,14 +92,14 @@ func doCalc(inA Matrix, inB Matrix) {
 					//      fmt.Print("(", inA[i][k], " * ", inB[k][j], ") + ")
 				}
 				//          fmt.Println("giving", total)
-				nM[i][j] = total
+				C[i][j] = total
 				total = 0
 			}
 			fmt.Println()
 		}
 		elapsed := time.Since(start)
 		fmt.Printf("Time taken to calculate %s ", elapsed)
-		printMat(nM)
+		ret <- C
 	} else {
 		//Set up wait group
 		splitWg := new(sync.WaitGroup)
@@ -96,10 +110,14 @@ func doCalc(inA Matrix, inB Matrix) {
 		returnA12 := make(chan [][]int)
 		returnA21 := make(chan [][]int)
 		returnA22 := make(chan [][]int)
+
 		returnB11 := make(chan [][]int)
 		returnB12 := make(chan [][]int)
 		returnB21 := make(chan [][]int)
 		returnB22 := make(chan [][]int)
+
+		calReturnC1 := make(chan [][]int)
+		calReturnC2 := make(chan [][]int)
 
 		//Split Matrix A into 4 sub-matrices
 		go splitMatrix(inA, 0, rowCount(inA)/2, 0, colCount(inA)/2, returnA11, splitWg)
@@ -115,16 +133,58 @@ func doCalc(inA Matrix, inB Matrix) {
 		go splitMatrix(inB, rowCount(inB)/2, rowCount(inB), 0, colCount(inB)/2, returnB21, splitWg)
 		go splitMatrix(inB, rowCount(inB)/2, rowCount(inB), rowCount(inB)/2, colCount(inB), returnB22, splitWg)
 
-		//splitMatrixB := StrassenMatrix{{<-returnB11, <-returnB12}, {<-returnB21, <-returnB22}}
+		//Let channel values equal variables for multiple use
+		A11 := <-returnA11
+		A12 := <-returnA12
+		/*A21 := <-returnA21
+		A22 := <-returnA22*/
 
-		//Wait for routines to complete
+		B11 := <-returnB11
+		/*B12 := <-returnB12*/
+		B21 := <-returnB21
+		/*B22 := <-returnB22*/
+
+		//Wait for split routines to complete
 		splitWg.Wait()
-		go doCalc()
-		mat := <-returnA11
-		fmt.Println("DoCal Matrix 1")
-		printMat(mat)
-	}
+		//Recursively call doCall 8 times to multiply each of the sub-matrices
+		go doCalc(A11, B11, calWg, calReturnC1)
+		go doCalc(A12, B21, calWg, calReturnC2)
+		/*		go doCalc(A11, B12, calWg, calReturnC2)
+				go doCalc(A12, B22, calWg, calReturnC2)
+				go doCalc(A21, B11, calWg, calReturnC2)
+				go doCalc(A22, B21, calWg, calReturnC2)
+				go doCalc(A21, B12, calWg, calReturnC2)
+				go doCalc(A22, B22, calWg, calReturnC2)*/
 
+		_A := <-calReturnC1
+		_B := <-calReturnC2
+
+		C11 := addMatrix(_A, _B)
+		printMat(C11)
+		/*
+			A11B12 := doCalc(A11, B12)
+			A12B22 := doCalc(A12, B22)
+
+			A21B11 := doCalc(A21, B11)
+			A22B21 := doCalc(A22, B21)
+
+			A21B12 := doCalc(A21, B12)
+			A22B22 := doCalc(A22, B22)
+
+			C11 := addMatrix(A11B11, A12B21)
+			C12 := addMatrix(A11B12, A12B22)
+			C21 := addMatrix(A21B11, A22B21)
+			C22 := addMatrix(A21B12, A22B22)
+
+			fmt.Println("C11 =")
+			printMat(C11)
+			fmt.Println("C12 =")
+			printMat(C12)
+			fmt.Println("C21 =")
+			printMat(C21)
+			fmt.Println("C22 =")
+			printMat(C22)*/
+	}
 }
 
 /*func doCalc(inA Matrix, inB Matrix) [][]int {
@@ -159,6 +219,10 @@ func doCalc(inA Matrix, inB Matrix) {
 }*/
 
 func main() {
+
+	calReturnMatrix := make(chan [][]int)
+	calWg := new(sync.WaitGroup)
+	calWg.Add(3)
 	start := time.Now()
 	//splitWg := new(sync.WaitGroup)
 	//Create Wait group for split go routines
@@ -178,7 +242,8 @@ func main() {
 
 	fmt.Println("Matrix Split")
 
-	doCalc(a, b)
+	doCalc(a, b, calWg, calReturnMatrix)
+	calWg.Wait()
 
 	//Separate Channels for the Go routines as the order of execution matters
 	/*returnA11 := make(chan [][]int)
