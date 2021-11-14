@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-var calWgReturn = new(sync.WaitGroup)
-
 type Matrix [][]int
 
 func printMat(inM Matrix) {
@@ -96,8 +94,8 @@ func combineMatrices(subMat [][]int, res [][]int, rowStart int, colStart int) []
 	return res
 }
 
-func doCalc(inA Matrix, inB Matrix, calWgReturn *sync.WaitGroup, ret chan [][]int) {
-
+func doCalc(inA Matrix, inB Matrix, calWg *sync.WaitGroup, ret chan [][]int) {
+	defer calWg.Done()
 	var i, j int
 	m := rowCount(inA) // number of rows the first matrix
 	//   n := colCount(inA)     // number of columns the first matrix
@@ -123,7 +121,6 @@ func doCalc(inA Matrix, inB Matrix, calWgReturn *sync.WaitGroup, ret chan [][]in
 				total = 0
 			}
 		}
-		calWgReturn.Done()
 		ret <- C
 	} else {
 		//Set up wait group
@@ -190,16 +187,13 @@ func doCalc(inA Matrix, inB Matrix, calWgReturn *sync.WaitGroup, ret chan [][]in
 		  p7 = (b - d) (g + h)
 		**/
 
-		go doCalc(addMatrix(a, d), addMatrix(e, h), calWgReturn, calReturnp1)      //p1
-		go doCalc(addMatrix(c, d), e, calWgReturn, calReturnp2)                    //p2
-		go doCalc(a, subtractMatrix(f, h), calWgReturn, calReturnp3)               //p3
-		go doCalc(d, subtractMatrix(g, e), calWgReturn, calReturnp4)               //p4
-		go doCalc(addMatrix(a, b), h, calWgReturn, calReturnp5)                    //p5
-		go doCalc(subtractMatrix(c, a), addMatrix(e, f), calWgReturn, calReturnp6) //p6
-		go doCalc(subtractMatrix(b, d), addMatrix(g, h), calWgReturn, calReturnp7) //p7
-
-		calWgReturn.Done()
-		calWgReturn.Wait()
+		go doCalc(addMatrix(a, d), addMatrix(e, h), calWg, calReturnp1)      //p1
+		go doCalc(addMatrix(c, d), e, calWg, calReturnp2)                    //p2
+		go doCalc(a, subtractMatrix(f, h), calWg, calReturnp3)               //p3
+		go doCalc(d, subtractMatrix(g, e), calWg, calReturnp4)               //p4
+		go doCalc(addMatrix(a, b), h, calWg, calReturnp5)                    //p5
+		go doCalc(subtractMatrix(c, a), addMatrix(e, f), calWg, calReturnp6) //p6
+		go doCalc(subtractMatrix(b, d), addMatrix(g, h), calWg, calReturnp7) //p7
 
 		p1 := <-calReturnp1
 		p2 := <-calReturnp2
@@ -228,7 +222,6 @@ func doCalc(inA Matrix, inB Matrix, calWgReturn *sync.WaitGroup, ret chan [][]in
 		combineMatrices(C22, res, m/2, m/2)
 
 		printMat(res)
-
 	}
 }
 
@@ -265,7 +258,6 @@ func doCalc(inA Matrix, inB Matrix, calWgReturn *sync.WaitGroup, ret chan [][]in
 
 func main() {
 
-	calWgReturn.Add(7)
 	calReturnMatrix := make(chan [][]int)
 	calWg := new(sync.WaitGroup)
 	calWg.Add(8)
@@ -275,18 +267,8 @@ func main() {
 	//
 	// Use slices
 	// Unlike arrays they are passed by reference,not by value
-	a := Matrix{{2, 3, 6, 4, 2, 3, 6, 4}, {5, 6, 4, 23, 2, 3, 6, 4},
-		{9, 6, 12, 23, 2, 3, 6, 4}, {4, 7, 12, 43, 2, 3, 6, 4},
-		{4, 7, 12, 43, 2, 3, 6, 4}, {4, 7, 12, 43, 2, 3, 6, 4},
-		{4, 7, 12, 43, 2, 3, 6, 4}, {4, 7, 12, 43, 2, 3, 6, 4}}
-
-	b := Matrix{{2, 3, 6, 4, 2, 3, 6, 4}, {5, 6, 4, 23, 2, 3, 6, 4},
-		{9, 6, 12, 23, 2, 3, 6, 4}, {4, 7, 12, 43, 2, 3, 6, 4},
-		{4, 7, 12, 43, 2, 3, 6, 4}, {4, 7, 12, 43, 2, 3, 6, 4},
-		{4, 7, 12, 43, 2, 3, 6, 4}, {4, 7, 12, 43, 2, 3, 6, 4}}
-
-	/*b := Matrix{{8, 18, 28, 14}, {38, 48, 58, 12},
-	{24, 56, 78, 34}, {12, 54, 76, 43}}*/
+	a := Matrix{{2, 3, 6, 4}, {5, 6, 4, 23}, {9, 6, 12, 23}, {4, 7, 12, 43}}
+	b := Matrix{{8, 18, 28, 14}, {38, 48, 58, 12}, {24, 56, 78, 34}, {12, 54, 76, 43}}
 
 	fmt.Println("Matrix A")
 	fmt.Println(" Number of cols in A ", colCount(a))
