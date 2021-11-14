@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+//Only works for square matrices
+
 type Matrix [][]int
 
 func printMat(inM Matrix) {
@@ -89,6 +91,58 @@ func combineMatrices(subMat [][]int, res [][]int, rowStart int, colStart int) []
 	for i, p = 0, rowStart; i < size; i, p = i+1, p+1 {
 		for j, q = 0, colStart; j < size; j, q = j+1, q+1 {
 			res[p][q] = subMat[i][j]
+		}
+	}
+	return res
+}
+
+func max(x, y int) int {
+	if x < y {
+		return y
+	} else {
+		return x
+	}
+}
+
+func getPadding(matA Matrix, matB Matrix) int {
+	rowLenA := rowCount(matA)
+
+	colLenB := colCount(matB)
+
+	//Finding maximum length to add padding
+	maxLenA := max(rowLenA, colLenB)
+	newLen := max(maxLenA, colLenB)
+	return newLen
+}
+
+func addPadding(mat Matrix, newLen int) [][]int {
+	rowLen := rowCount(mat)
+	colLen := colCount(mat)
+
+	if newLen&(newLen-1) == 0 {
+		return mat
+	} else {
+		//Bitwise calculation to find power
+		for newLen&(newLen-1) != 0 {
+			newLen++
+		}
+		paddedMat := newMatrix(newLen, newLen)
+		for i := 0; i < rowLen; i++ {
+			for j := 0; j < colLen; j++ {
+				paddedMat[i][j] = mat[i][j]
+			}
+		}
+		return paddedMat
+	}
+}
+
+//Remove Left over zeros from the padding
+func removePadding(mat Matrix, r int, c int) [][]int {
+	res := newMatrix(r, c)
+
+	for i := 0; i < r; i++ {
+		for j := 0; j < c; j++ {
+			res[i][j] = mat[i][j]
 		}
 	}
 	return res
@@ -186,14 +240,12 @@ func doCalc(inA Matrix, inB Matrix) [][]int {
 		  p6 = (c - a) (e + f)
 		  p7 = (b - d) (g + h)
 		**/
-		/*var calWg sync.WaitGroup
-		calWg.Add(7)*/
 
-		p1 := doCalc(addMatrix(a, d), addMatrix(e, h)) //p1
-		p2 := doCalc(addMatrix(c, d), e)               //p2
-		p3 := doCalc(a, subtractMatrix(f, h))          //p3
-		p4 := doCalc(d, subtractMatrix(g, e))          //p4 doCalc(addMatrix(a, b), h, &calWg, calReturnp5)                    //p5
-		p5 := doCalc(addMatrix(a, b), h)
+		p1 := doCalc(addMatrix(a, d), addMatrix(e, h))      //p1
+		p2 := doCalc(addMatrix(c, d), e)                    //p2
+		p3 := doCalc(a, subtractMatrix(f, h))               //p3
+		p4 := doCalc(d, subtractMatrix(g, e))               //p4
+		p5 := doCalc(addMatrix(a, b), h)                    //p5
 		p6 := doCalc(subtractMatrix(c, a), addMatrix(e, f)) //p6
 		p7 := doCalc(subtractMatrix(b, d), addMatrix(g, h)) //p7
 
@@ -264,44 +316,43 @@ func doCalc(inA Matrix, inB Matrix) [][]int {
 
 func main() {
 
-	//calReturnMatrix := make(chan [][]int)
 	start := time.Now()
-	calgWReturn := new(sync.WaitGroup)
-	calgWReturn.Add(8)
-	//splitWg := new(sync.WaitGroup)
-	//Create Wait group for split go routines
-	//
-	// Use slices
-	// Unlike arrays they are passed by reference,not by value
-	/*	a := Matrix{{2, 3, 6, 4, 2, 3, 6, 4}, {5, 6, 4, 23, 5, 6, 4, 23},
-						{9, 6, 12, 23, 5, 6, 4, 23},{4, 7, 12, 43, 5, 6, 4, 23},
-							{4, 7, 12, 43, 5, 6, 4, 23}, {9, 6, 12, 23, 5, 6, 4, 23},
-								{9, 6, 12, 23, 5, 6, 4, 23}, {5, 6, 4, 23, 5, 6, 4, 23}}
 
-		b:= Matrix{{2, 3, 6, 4, 2, 3, 6, 4}, {5, 6, 4, 23, 5, 6, 4, 23},
-						{9, 6, 12, 23, 5, 6, 4, 23},{4, 7, 12, 43, 5, 6, 4, 23},
-							{4, 7, 12, 43, 5, 6, 4, 23}, {9, 6, 12, 23, 5, 6, 4, 23},
-								{9, 6, 12, 23, 5, 6, 4, 23}, {5, 6, 4, 23, 5, 6, 4, 23}}*/
+	a := Matrix{{8, 18, 28, 14, 15}, {38, 48, 58, 12, 15},
+		{24, 56, 78, 34, 15}, {12, 54, 76, 43, 15}}
 
-	a := Matrix{{8, 18, 28, 14}, {38, 48, 58, 12},
-		{24, 56, 78, 34}, {12, 54, 76, 43}}
+	b := Matrix{{8, 18, 28, 14, 15, 23}, {38, 48, 58, 12, 15, 24},
+		{24, 56, 78, 34, 15, 25}, {12, 54, 76, 43, 15, 26},
+		{8, 18, 28, 14, 15, 27}}
 
-	b := Matrix{{8, 18, 28, 14}, {38, 48, 58, 12},
-		{24, 56, 78, 34}, {12, 54, 76, 43}}
+	rowLenA := rowCount(a)
+	colLenA := colCount(a)
 
-	fmt.Println("Matrix A")
+	rowLenB := rowCount(b)
+	colLenB := colCount(b)
+
+	fmt.Println("Matrix A = ", rowLenA, "X", colLenA)
 	fmt.Println(" Number of cols in A ", colCount(a))
 	printMat(a)
 
-	fmt.Println("Matrix B")
+	fmt.Println("Matrix B = ", rowLenB, "X", colLenB)
 	fmt.Println(" Number of rows in B ", rowCount(b))
 	printMat(b)
 
-	fmt.Println("Matrix Split")
+	if colLenA != rowLenB {
+		fmt.Println("Number of columns in matrix A must equal number of rows in matrix B")
+	} else {
+		fmt.Println("Concurrently splitting ")
+		padSize := getPadding(a, b)
+		a = addPadding(a, padSize)
+		b = addPadding(b, padSize)
 
-	mat := doCalc(a, b)
-	printMat(mat)
+		mat := doCalc(a, b)
+		res := removePadding(mat, rowLenA, colLenA)
 
-	elapsed := time.Since(start)
-	fmt.Printf("Time taken to calculate %s ", elapsed)
+		printMat(res)
+
+		elapsed := time.Since(start)
+		fmt.Printf("Time taken to calculate %s ", elapsed)
+	}
 }
