@@ -94,8 +94,7 @@ func combineMatrices(subMat [][]int, res [][]int, rowStart int, colStart int) []
 	return res
 }
 
-func doCalc(inA Matrix, inB Matrix, calWg *sync.WaitGroup, ret chan [][]int) {
-	defer calWg.Done()
+func doCalc(inA Matrix, inB Matrix) [][]int {
 	var i, j int
 	m := rowCount(inA) // number of rows the first matrix
 	//   n := colCount(inA)     // number of columns the first matrix
@@ -121,7 +120,8 @@ func doCalc(inA Matrix, inB Matrix, calWg *sync.WaitGroup, ret chan [][]int) {
 				total = 0
 			}
 		}
-		ret <- C
+		//calWg.Done()
+		return C
 	} else {
 		//Set up wait group
 		splitWg := new(sync.WaitGroup)
@@ -139,13 +139,13 @@ func doCalc(inA Matrix, inB Matrix, calWg *sync.WaitGroup, ret chan [][]int) {
 		returnB22 := make(chan [][]int)
 
 		//7 channels for Strassen equation outputs
-		calReturnp1 := make(chan [][]int)
+		/*calReturnp1 := make(chan [][]int)
 		calReturnp2 := make(chan [][]int)
 		calReturnp3 := make(chan [][]int)
 		calReturnp4 := make(chan [][]int)
 		calReturnp5 := make(chan [][]int)
 		calReturnp6 := make(chan [][]int)
-		calReturnp7 := make(chan [][]int)
+		calReturnp7 := make(chan [][]int)*/
 
 		//Split Matrix A into 4 sub-matrices
 		go splitMatrix(inA, 0, rowCount(inA)/2, 0, colCount(inA)/2, returnA11, splitWg)
@@ -161,6 +161,10 @@ func doCalc(inA Matrix, inB Matrix, calWg *sync.WaitGroup, ret chan [][]int) {
 		go splitMatrix(inB, rowCount(inB)/2, rowCount(inB), 0, colCount(inB)/2, returnB21, splitWg)
 		go splitMatrix(inB, rowCount(inB)/2, rowCount(inB), rowCount(inB)/2, colCount(inB), returnB22, splitWg)
 
+		//Wait for split routines to complete
+		splitWg.Wait()
+		//Recursively call doCall 8 times to multiply each of the sub-matrices
+
 		//Let channel values equal variables for multiple use
 		a := <-returnA11
 		b := <-returnA12
@@ -172,10 +176,6 @@ func doCalc(inA Matrix, inB Matrix, calWg *sync.WaitGroup, ret chan [][]int) {
 		g := <-returnB21
 		h := <-returnB22
 
-		//Wait for split routines to complete
-		splitWg.Wait()
-		//Recursively call doCall 8 times to multiply each of the sub-matrices
-
 		//Strassen's 7 equations
 		/**
 		  p1 = (a + d)(e + h)
@@ -186,22 +186,28 @@ func doCalc(inA Matrix, inB Matrix, calWg *sync.WaitGroup, ret chan [][]int) {
 		  p6 = (c - a) (e + f)
 		  p7 = (b - d) (g + h)
 		**/
+		/*var calWg sync.WaitGroup
+		calWg.Add(7)*/
 
-		go doCalc(addMatrix(a, d), addMatrix(e, h), calWg, calReturnp1)      //p1
-		go doCalc(addMatrix(c, d), e, calWg, calReturnp2)                    //p2
-		go doCalc(a, subtractMatrix(f, h), calWg, calReturnp3)               //p3
-		go doCalc(d, subtractMatrix(g, e), calWg, calReturnp4)               //p4
-		go doCalc(addMatrix(a, b), h, calWg, calReturnp5)                    //p5
-		go doCalc(subtractMatrix(c, a), addMatrix(e, f), calWg, calReturnp6) //p6
-		go doCalc(subtractMatrix(b, d), addMatrix(g, h), calWg, calReturnp7) //p7
+		p1 := doCalc(addMatrix(a, d), addMatrix(e, h)) //p1
+		p2 := doCalc(addMatrix(c, d), e)               //p2
+		p3 := doCalc(a, subtractMatrix(f, h))          //p3
+		p4 := doCalc(d, subtractMatrix(g, e))          //p4 doCalc(addMatrix(a, b), h, &calWg, calReturnp5)                    //p5
+		p5 := doCalc(addMatrix(a, b), h)
+		p6 := doCalc(subtractMatrix(c, a), addMatrix(e, f)) //p6
+		p7 := doCalc(subtractMatrix(b, d), addMatrix(g, h)) //p7
 
-		p1 := <-calReturnp1
-		p2 := <-calReturnp2
-		p3 := <-calReturnp3
-		p4 := <-calReturnp4
-		p5 := <-calReturnp5
-		p6 := <-calReturnp6
-		p7 := <-calReturnp7
+		//time.Sleep(5* time.Second)
+		/*
+			calWg.Wait()
+
+			p1 := <-calReturnp1
+			p2 := <-calReturnp2
+			p3 := <-calReturnp3
+			p4 := <-calReturnp4
+			p5 := <-calReturnp5
+			p6 := <-calReturnp6
+			p7 := <-calReturnp7*/
 
 		/**
 		  C11 = p1 + p4 - p5 + p7
@@ -221,8 +227,8 @@ func doCalc(inA Matrix, inB Matrix, calWg *sync.WaitGroup, ret chan [][]int) {
 		combineMatrices(C21, res, m/2, 0)
 		combineMatrices(C22, res, m/2, m/2)
 
-		printMat(res)
 	}
+	return res
 }
 
 /*func doCalc(inA Matrix, inB Matrix) [][]int {
@@ -258,17 +264,30 @@ func doCalc(inA Matrix, inB Matrix, calWg *sync.WaitGroup, ret chan [][]int) {
 
 func main() {
 
-	calReturnMatrix := make(chan [][]int)
-	calWg := new(sync.WaitGroup)
-	calWg.Add(8)
+	//calReturnMatrix := make(chan [][]int)
 	start := time.Now()
+	calgWReturn := new(sync.WaitGroup)
+	calgWReturn.Add(8)
 	//splitWg := new(sync.WaitGroup)
 	//Create Wait group for split go routines
 	//
 	// Use slices
 	// Unlike arrays they are passed by reference,not by value
-	a := Matrix{{2, 3, 6, 4}, {5, 6, 4, 23}, {9, 6, 12, 23}, {4, 7, 12, 43}}
-	b := Matrix{{8, 18, 28, 14}, {38, 48, 58, 12}, {24, 56, 78, 34}, {12, 54, 76, 43}}
+	/*	a := Matrix{{2, 3, 6, 4, 2, 3, 6, 4}, {5, 6, 4, 23, 5, 6, 4, 23},
+						{9, 6, 12, 23, 5, 6, 4, 23},{4, 7, 12, 43, 5, 6, 4, 23},
+							{4, 7, 12, 43, 5, 6, 4, 23}, {9, 6, 12, 23, 5, 6, 4, 23},
+								{9, 6, 12, 23, 5, 6, 4, 23}, {5, 6, 4, 23, 5, 6, 4, 23}}
+
+		b:= Matrix{{2, 3, 6, 4, 2, 3, 6, 4}, {5, 6, 4, 23, 5, 6, 4, 23},
+						{9, 6, 12, 23, 5, 6, 4, 23},{4, 7, 12, 43, 5, 6, 4, 23},
+							{4, 7, 12, 43, 5, 6, 4, 23}, {9, 6, 12, 23, 5, 6, 4, 23},
+								{9, 6, 12, 23, 5, 6, 4, 23}, {5, 6, 4, 23, 5, 6, 4, 23}}*/
+
+	a := Matrix{{8, 18, 28, 14}, {38, 48, 58, 12},
+		{24, 56, 78, 34}, {12, 54, 76, 43}}
+
+	b := Matrix{{8, 18, 28, 14}, {38, 48, 58, 12},
+		{24, 56, 78, 34}, {12, 54, 76, 43}}
 
 	fmt.Println("Matrix A")
 	fmt.Println(" Number of cols in A ", colCount(a))
@@ -280,8 +299,8 @@ func main() {
 
 	fmt.Println("Matrix Split")
 
-	doCalc(a, b, calWg, calReturnMatrix)
-	calWg.Wait()
+	mat := doCalc(a, b)
+	printMat(mat)
 
 	elapsed := time.Since(start)
 	fmt.Printf("Time taken to calculate %s ", elapsed)
