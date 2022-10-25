@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-//Only works for square matrices
-
 type Matrix [][]int
 
 func printMat(inM Matrix) {
